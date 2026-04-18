@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tes-speak-backend"
 version = "0.1.0"
@@ -22,6 +26,9 @@ dev = [
   "moto[dynamodb,s3]>=5",
   "respx>=0.21",
 ]
+
+[tool.setuptools]
+packages = ["shared", "ingestion", "tts", "api"]
 
 [tool.ruff]
 line-length = 100
