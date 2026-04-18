@@ -1,0 +1,46 @@
+name: ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: Game to ingest
+        type: choice
+        default: skyrim
+        options: [skyrim, morrowind, oblivion, eso, daggerfall, arena]
+      limit:
+        description: Optional limit (for testing)
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GHA_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build payload
+        id: payload
+        run: |
+          if [ -n "${{ inputs.limit }}" ]; then
+            echo "payload={\"game\":\"${{ inputs.game }}\",\"limit\":${{ inputs.limit }}}" >> "$GITHUB_OUTPUT"
+          else
+            echo "payload={\"game\":\"${{ inputs.game }}\"}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Invoke ingestion lambda
+        run: |
+          aws lambda invoke \
+            --function-name "${{ vars.INGESTION_LAMBDA_NAME }}" \
+            --payload '${{ steps.payload.outputs.payload }}' \
+            --cli-binary-format raw-in-base64-out \
+            response.json
+          cat response.json

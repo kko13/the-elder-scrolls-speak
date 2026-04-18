@@ -1,0 +1,76 @@
+name: terraform-plan
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'backend/**'
+      - '.github/workflows/terraform-plan.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/envs/dev
+    env:
+      TF_BACKEND_BUCKET: ${{ vars.TF_BACKEND_BUCKET }}
+      TF_BACKEND_LOCK_TABLE: ${{ vars.TF_BACKEND_LOCK_TABLE }}
+      TF_VAR_github_owner: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GHA_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # Build empty placeholder zips so terraform validate passes without
+      # the full backend build. The plan job doesn't need real artifacts.
+      - name: Stub Lambda packages
+        run: |
+          mkdir -p ../../../backend/dist
+          for n in ingestion tts api; do
+            (cd /tmp && echo "stub" > stub.txt && zip -q "$GITHUB_WORKSPACE/backend/dist/$n.zip" stub.txt)
+          done
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - run: terraform fmt -check -recursive
+        working-directory: infra
+
+      - run: |
+          terraform init \
+            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="key=envs/dev/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=${TF_BACKEND_LOCK_TABLE}"
+
+      - run: terraform validate
+
+      - id: plan
+        run: terraform plan -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Comment plan
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const out = `Terraform plan exit: ${{ steps.plan.outcome }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: out,
+            });
+
+      - if: steps.plan.outcome == 'failure'
+        run: exit 1
