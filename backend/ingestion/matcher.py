@@ -14,17 +14,25 @@ from rapidfuzz import fuzz, process
 
 _ROMAN = {"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5",
           "vi": "6", "vii": "7", "viii": "8", "ix": "9", "x": "10"}
+# Volume/part markers — strip so "X, v1" ≡ "X, Book I" ≡ "X, Part 1".
+_VOLUME_MARKERS = {"v", "vol", "volume", "book", "books", "part", "pt"}
 _PUNCT = re.compile(r"[^\w\s]")
 _WS = re.compile(r"\s+")
+_VNUM = re.compile(r"^v(\d+)$")  # e.g. "v1" → "1"
 
 
 def normalise(title: str) -> str:
     t = title.lower().strip()
     t = _PUNCT.sub(" ", t)
     t = _WS.sub(" ", t).strip()
-    # Replace roman numerals (whole-word only).
     out = []
     for word in t.split():
+        m = _VNUM.match(word)
+        if m:
+            out.append(m.group(1))
+            continue
+        if word in _VOLUME_MARKERS:
+            continue
         out.append(_ROMAN.get(word, word))
     return " ".join(out)
 
