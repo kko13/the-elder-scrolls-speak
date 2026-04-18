@@ -72,7 +72,10 @@ def submit(event: dict, _ctx) -> dict:
 
         text = _load_text(texts_bucket, item["text_s3_key"])
         if len(text) > MAX_LONG_FORM_CHARS:
-            log.warning("book %s exceeds %d chars (%d) — truncating", book_id, MAX_LONG_FORM_CHARS, len(text))
+            log.warning(
+                "book %s exceeds %d chars (%d) — truncating",
+                book_id, MAX_LONG_FORM_CHARS, len(text),
+            )
             text = text[:MAX_LONG_FORM_CHARS]
 
         voice = voice_for_author(item.get("author"))

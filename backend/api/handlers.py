@@ -126,39 +126,30 @@ def get_book(event: dict) -> dict:
 
 
 # ---------- router ----------
-
-ROUTES = [
-    ("GET", "/health",            health),
-    ("GET", "/games",             list_games),
-    ("GET", "/authors",           list_authors),
-    ("GET", "/books",             list_books),
-    ("GET", "/books/{book_id}",   get_book),
-]
-
+#
+# API Gateway is configured with a single `ANY /{proxy+}` route, so every
+# request lands here. We dispatch on (method, parsed path).
 
 def lambda_handler(event: dict, _ctx) -> dict:
     method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
     raw_path = event.get("rawPath", "/")
-    # API Gateway HTTP API gives us the matched route key; fall back to raw path.
-    route_key = event.get("routeKey", f"{method} {raw_path}")
+    parts = raw_path.strip("/").split("/")
 
-    for verb, pattern, fn in ROUTES:
-        if route_key == f"{verb} {pattern}" or route_key == f"{verb} /{{proxy+}}" and raw_path.lstrip("/") == pattern.lstrip("/"):
-            try:
-                return fn(event)
-            except Exception:
-                log.exception("handler error: %s %s", verb, pattern)
-                return _ok({"error": "internal error"}, status=500)
+    try:
+        if method == "GET":
+            if parts == ["health"]:
+                return health(event)
+            if parts == ["games"]:
+                return list_games(event)
+            if parts == ["authors"]:
+                return list_authors(event)
+            if parts == ["books"]:
+                return list_books(event)
+            if len(parts) == 2 and parts[0] == "books":
+                event.setdefault("pathParameters", {})["book_id"] = parts[1]
+                return get_book(event)
+    except Exception:
+        log.exception("handler error: %s %s", method, raw_path)
+        return _ok({"error": "internal error"}, status=500)
 
-    # Manual dispatch fallback for /{proxy+} catch-all routing.
-    if method == "GET":
-        path_parts = raw_path.strip("/").split("/")
-        if path_parts == ["health"]:    return health(event)
-        if path_parts == ["games"]:     return list_games(event)
-        if path_parts == ["authors"]:   return list_authors(event)
-        if path_parts == ["books"]:     return list_books(event)
-        if len(path_parts) == 2 and path_parts[0] == "books":
-            event.setdefault("pathParameters", {})["book_id"] = path_parts[1]
-            return get_book(event)
-
-    return _not_found(f"no route for {route_key}")
+    return _not_found(f"no route for {method} {raw_path}")

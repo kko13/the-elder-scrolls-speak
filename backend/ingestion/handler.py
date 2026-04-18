@@ -114,7 +114,9 @@ def lambda_handler(event: dict, _ctx) -> dict:
                 game=game,
                 author=uesp.author if uesp else None,
                 summary=uesp.summary if uesp else None,
-                in_game_locations=[InGameLocation(notes=loc) for loc in (uesp.locations if uesp else [])],
+                in_game_locations=[
+                    InGameLocation(notes=loc) for loc in (uesp.locations if uesp else [])
+                ],
                 text_s3_key=text_key,
                 imperial_library_url=book.url,
                 uesp_url=uesp.url if uesp else None,
